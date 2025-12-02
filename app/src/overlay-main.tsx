@@ -1,7 +1,11 @@
+import { MantineProvider } from "@mantine/core";
+import "@mantine/core/styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import OverlayApp from "./OverlayApp";
+
+console.log("=== OVERLAY MAIN LOADING ===");
 
 // Styles are imported in OverlayApp.tsx via app.css
 
@@ -20,7 +24,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
 	<StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<OverlayApp />
+			<MantineProvider defaultColorScheme="dark">
+				<OverlayApp />
+			</MantineProvider>
 		</QueryClientProvider>
 	</StrictMode>,
 );

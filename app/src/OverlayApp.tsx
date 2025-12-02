@@ -247,6 +247,7 @@ function RecordingControl() {
 }
 
 export default function OverlayApp() {
+	console.log("=== OverlayApp RENDERING ===");
 	const [client, setClient] = useState<PipecatClient | null>(null);
 	const [devicesReady, setDevicesReady] = useState(false);
 	const { data: settings } = useSettings();
