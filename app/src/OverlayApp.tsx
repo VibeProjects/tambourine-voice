@@ -275,12 +275,14 @@ function RecordingControl() {
 	return (
 		<div
 			ref={containerRef}
+			data-tauri-drag-region
 			style={{
 				width: "fit-content",
 				height: "fit-content",
 				backgroundColor: "rgba(0, 0, 0, 0.9)",
 				borderRadius: 12,
 				padding: 4,
+				cursor: "grab",
 			}}
 		>
 			<UserAudioComponent

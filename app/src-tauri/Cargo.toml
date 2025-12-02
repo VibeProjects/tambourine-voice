@@ -35,8 +35,5 @@ dirs = "6.0"
 # Audio playback
 rodio = { version = "0.20", default-features = false, features = ["wav"] }
 
-# Thread-safe lazy initialization
-once_cell = "1.19"
-
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2.3.1"

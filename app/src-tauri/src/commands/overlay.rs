@@ -1,9 +1,4 @@
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
-
-// Store the fixed center point (calculated from initial position)
-static OVERLAY_CENTER: Lazy<Mutex<Option<(f64, f64)>>> = Lazy::new(|| Mutex::new(None));
 
 #[tauri::command]
 pub async fn resize_overlay(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
@@ -13,21 +8,17 @@ pub async fn resize_overlay(app: AppHandle, width: f64, height: f64) -> Result<(
     let height = height.max(min_size);
 
     if let Some(window) = app.get_webview_window("overlay") {
-        // Get or initialize the center point
-        let center = {
-            let mut center_guard = OVERLAY_CENTER.lock().unwrap();
-            if center_guard.is_none() {
-                // Calculate initial center from current position and size
-                if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
-                    let scale = window.scale_factor().unwrap_or(1.0);
-                    let x = pos.x as f64 / scale;
-                    let y = pos.y as f64 / scale;
-                    let w = size.width as f64 / scale;
-                    let h = size.height as f64 / scale;
-                    *center_guard = Some((x + w / 2.0, y + h / 2.0));
-                }
-            }
-            *center_guard
+        // Get current center point from current position and size
+        // This allows the overlay to be dragged and maintain its new position
+        let center = if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+            let scale = window.scale_factor().unwrap_or(1.0);
+            let x = pos.x as f64 / scale;
+            let y = pos.y as f64 / scale;
+            let w = size.width as f64 / scale;
+            let h = size.height as f64 / scale;
+            Some((x + w / 2.0, y + h / 2.0))
+        } else {
+            None
         };
 
         // Set the new size
