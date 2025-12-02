@@ -37,12 +37,15 @@ function isTranscriptMessage(
 	);
 }
 
+type ConnectionState = "idle" | "connecting" | "connected" | "disconnecting";
+
 function RecordingControl() {
 	const client = usePipecatClient();
 	const { isRecording, setRecording, setWaitingForResponse } =
 		useRecordingStore();
 	const clientRef = useRef(client);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const connectionStateRef = useRef<ConnectionState>("idle");
 
 	// ResizeObserver to auto-resize window to fit content
 	useEffect(() => {
@@ -70,6 +73,28 @@ function RecordingControl() {
 	const typeTextMutation = useTypeText();
 	const addHistoryEntry = useAddHistoryEntry();
 
+	// Helper to disconnect client gracefully
+	const disconnectClient = useCallback(async () => {
+		const currentClient = clientRef.current;
+		if (!currentClient || connectionStateRef.current === "idle") return;
+
+		connectionStateRef.current = "disconnecting";
+		try {
+			await currentClient.disconnect();
+		} catch (error) {
+			// Ignore "Session ended" errors - client wasn't fully connected
+			const errorStr = String(error);
+			if (
+				!errorStr.includes("Session ended") &&
+				!errorStr.includes("not started")
+			) {
+				console.error("Disconnect error:", error);
+			}
+		} finally {
+			connectionStateRef.current = "idle";
+		}
+	}, []);
+
 	// Timeout to disconnect if no response in 10 seconds
 	const { start: startResponseTimeout, clear: clearResponseTimeout } =
 		useTimeout(() => {
@@ -77,32 +102,44 @@ function RecordingControl() {
 			if (currentState.isWaitingForResponse) {
 				console.log("Response timeout - disconnecting");
 				setWaitingForResponse(false);
-				clientRef.current?.disconnect().catch((error: unknown) => {
-					console.error("Failed to disconnect on timeout:", error);
-				});
+				disconnectClient();
 			}
 		}, 10000);
 
 	const startRecording = useCallback(async () => {
-		console.log("startRecording called", { serverUrl });
+		console.log("startRecording called", {
+			serverUrl,
+			connectionState: connectionStateRef.current,
+		});
 		const currentClient = clientRef.current;
-		const state = useRecordingStore.getState();
-		if (state.isRecording || !currentClient || !serverUrl) {
+
+		// Check connection state first - only allow starting from idle
+		if (connectionStateRef.current !== "idle") {
+			console.log(
+				"startRecording aborted - connection busy:",
+				connectionStateRef.current,
+			);
+			return;
+		}
+
+		if (!currentClient || !serverUrl) {
 			console.log("startRecording aborted", {
-				isRecording: state.isRecording,
 				hasClient: !!currentClient,
 				hasServerUrl: !!serverUrl,
 			});
 			return;
 		}
 
+		connectionStateRef.current = "connecting";
 		setRecording(true);
 		try {
 			console.log("Connecting to server:", serverUrl);
 			await currentClient.connect({ wsUrl: serverUrl });
+			// Note: connectionStateRef will be set to 'connected' by RTVIEvent.Connected handler
 			console.log("Connected successfully");
 		} catch (error) {
 			console.error("Failed to connect:", error);
+			connectionStateRef.current = "idle";
 			setRecording(false);
 		}
 	}, [serverUrl, setRecording]);
@@ -166,6 +203,29 @@ function RecordingControl() {
 		}
 	}, [isRecording, startRecording, stopRecording]);
 
+	// Track connection state via RTVI events
+	useEffect(() => {
+		if (!client) return;
+
+		const handleConnected = () => {
+			console.log("RTVIEvent.Connected - audio session started");
+			connectionStateRef.current = "connected";
+		};
+
+		const handleDisconnected = () => {
+			console.log("RTVIEvent.Disconnected");
+			connectionStateRef.current = "idle";
+		};
+
+		client.on(RTVIEvent.Connected, handleConnected);
+		client.on(RTVIEvent.Disconnected, handleDisconnected);
+
+		return () => {
+			client.off(RTVIEvent.Connected, handleConnected);
+			client.off(RTVIEvent.Disconnected, handleDisconnected);
+		};
+	}, [client]);
+
 	// Handle transcript and type text, then disconnect
 	useEffect(() => {
 		if (!client) return;
@@ -181,14 +241,7 @@ function RecordingControl() {
 
 			// Disconnect after receiving response
 			setWaitingForResponse(false);
-			const currentClient = clientRef.current;
-			if (currentClient) {
-				try {
-					await currentClient.disconnect();
-				} catch (error) {
-					console.error("Failed to disconnect after response:", error);
-				}
-			}
+			await disconnectClient();
 		};
 
 		const handleBotTranscript = async (data: { text?: string }) => {
@@ -216,6 +269,7 @@ function RecordingControl() {
 		typeTextMutation,
 		addHistoryEntry,
 		clearResponseTimeout,
+		disconnectClient,
 	]);
 
 	return (
@@ -275,7 +329,9 @@ export default function OverlayApp() {
 			});
 
 		return () => {
-			pipecatClient.disconnect();
+			pipecatClient.disconnect().catch(() => {
+				// Ignore errors on cleanup - component is unmounting
+			});
 		};
 	}, []);
 

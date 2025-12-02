@@ -21,3 +21,16 @@ body {
 	align-items: center;
 	justify-content: center;
 }
+
+/* Hide tooltips/popups in overlay - use high specificity instead of !important */
+html body [data-radix-popper-content-wrapper],
+html body [role="tooltip"],
+html body .vkui-tooltip,
+#root [data-radix-popper-content-wrapper],
+#root [role="tooltip"],
+#root .vkui-tooltip {
+	display: none;
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
