@@ -1,11 +1,13 @@
 import {
 	Alert,
 	Kbd,
+	Loader,
 	NavLink,
 	Switch,
 	Text,
 	Textarea,
 	Title,
+	Tooltip,
 } from "@mantine/core";
 import { AlertCircle, Home, Mic, Settings } from "lucide-react";
 import { useState } from "react";
@@ -19,9 +21,38 @@ import {
 	useUpdateToggleHotkey,
 } from "./lib/queries";
 import type { HotkeyConfig } from "./lib/tauri";
+import { useRecordingStore } from "./stores/recordingStore";
 import "./styles.css";
 
 type View = "home" | "settings";
+
+function ConnectionStatusIndicator() {
+	const state = useRecordingStore((s) => s.state);
+
+	const isConnected =
+		state === "idle" || state === "recording" || state === "processing";
+	const isConnecting = state === "connecting";
+
+	const statusText = isConnecting
+		? "Connecting..."
+		: isConnected
+			? "Connected"
+			: "Disconnected";
+
+	return (
+		<Tooltip label={statusText} position="right" withArrow>
+			<div className="connection-status">
+				{isConnecting ? (
+					<Loader size={10} color="orange" />
+				) : (
+					<span
+						className={`connection-status-dot ${isConnected ? "connected" : "disconnected"}`}
+					/>
+				)}
+			</div>
+		</Tooltip>
+	);
+}
 
 function Sidebar({
 	activeView,
@@ -61,6 +92,7 @@ function Sidebar({
 			</nav>
 
 			<footer className="sidebar-footer">
+				<ConnectionStatusIndicator />
 				<p className="sidebar-footer-text">v1.0.0</p>
 			</footer>
 		</aside>

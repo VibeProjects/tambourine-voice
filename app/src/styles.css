@@ -482,3 +482,28 @@ body {
 	animation-delay: 0.2s;
 	opacity: 0;
 }
+
+/* Connection Status Indicator */
+.connection-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	margin-bottom: 8px;
+	cursor: default;
+}
+
+.connection-status-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+}
+
+.connection-status-dot.disconnected {
+	background-color: #ef4444;
+}
+
+.connection-status-dot.connected {
+	background-color: #22c55e;
+}
