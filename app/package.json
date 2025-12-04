@@ -10,7 +10,8 @@
 		"lint": "biome check --write",
 		"typecheck": "tsc --noEmit",
 		"knip": "knip",
-		"check": "pnpm run lint && pnpm run typecheck && pnpm run knip",
+		"cargo": "cargo check --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml",
+		"check": "pnpm run lint && pnpm run typecheck && pnpm run knip, && pnpm run cargo",
 		"tauri": "tauri"
 	},
 	"author": "",
