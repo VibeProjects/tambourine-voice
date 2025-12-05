@@ -331,10 +331,18 @@ function RecordingControl() {
 		}
 	}, [state, onStartRecording, onStopRecording]);
 
+	// Drag handler for unfocused window (data-tauri-drag-region doesn't work on unfocused windows)
+	const handleMouseDown = useCallback((event: React.MouseEvent) => {
+		if (event.button === 0) {
+			tauriAPI.startDragging();
+		}
+	}, []);
+
 	return (
 		<div
 			ref={containerRef}
-			data-tauri-drag-region
+			role="application"
+			onMouseDown={handleMouseDown}
 			style={{
 				width: "fit-content",
 				height: "fit-content",
@@ -342,6 +350,7 @@ function RecordingControl() {
 				borderRadius: 12,
 				padding: 4,
 				cursor: "grab",
+				userSelect: "none",
 			}}
 		>
 			{state === "processing" ? (

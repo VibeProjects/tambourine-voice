@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface TypeTextResult {
 	success: boolean;
@@ -106,6 +107,11 @@ export const tauriAPI = {
 	// Overlay API
 	async resizeOverlay(width: number, height: number): Promise<void> {
 		return invoke("resize_overlay", { width, height });
+	},
+
+	async startDragging(): Promise<void> {
+		const window = getCurrentWindow();
+		return window.startDragging();
 	},
 };
 

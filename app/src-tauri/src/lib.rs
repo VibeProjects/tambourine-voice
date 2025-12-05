@@ -76,6 +76,7 @@ pub fn run() {
             .resizable(false)
             .focused(false)
             .focusable(false)
+            .accept_first_mouse(true)
             .visible(true)
             .build()?;
 
