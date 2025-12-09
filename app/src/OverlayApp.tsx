@@ -49,7 +49,11 @@ function isRecordingCompleteMessage(
 	);
 }
 
-function RecordingControl() {
+interface RecordingControlProps {
+	onNeedsClientRecreation: () => void;
+}
+
+function RecordingControl({ onNeedsClientRecreation }: RecordingControlProps) {
 	const client = usePipecatClient();
 	const { state, setClient, startRecording, stopRecording, handleResponse } =
 		useRecordingStore();
@@ -60,8 +64,10 @@ function RecordingControl() {
 	const mouseDownPositionRef = useRef<{ x: number; y: number } | null>(null);
 	const hasDragStartedRef = useRef<boolean>(false);
 
-	// Ref to prevent double-triggering reconnection
-	const hasTriggeredDisconnectRef = useRef<boolean>(false);
+	// Track last client recreation time to debounce rapid recreations
+	const lastRecreationTimeRef = useRef(0);
+	// Minimum delay between client recreations (ms)
+	const RECREATION_DEBOUNCE_MS = 2000;
 
 	const { data: serverUrl } = useServerUrl();
 	const { data: settings } = useSettings();
@@ -173,7 +179,6 @@ function RecordingControl() {
 
 		const onConnected = () => {
 			console.log("[Pipecat] Connected to server");
-			hasTriggeredDisconnectRef.current = false; // Reset on successful connection
 			handlePipecatConnect();
 
 			// Sync cleanup prompt sections to server via REST API
@@ -205,10 +210,7 @@ function RecordingControl() {
 		const onDisconnected = () => {
 			console.log("[Pipecat] Disconnected from server");
 			// The connection manager handles reconnection with exponential backoff
-			if (!hasTriggeredDisconnectRef.current) {
-				hasTriggeredDisconnectRef.current = true;
-				handlePipecatDisconnect();
-			}
+			handlePipecatDisconnect();
 		};
 
 		const onServerMessage = async (message: unknown) => {
@@ -248,13 +250,6 @@ function RecordingControl() {
 			console.log("[Pipecat] User stopped speaking");
 		};
 
-		const onLocalAudioLevel = (level: number | string) => {
-			const numLevel = typeof level === "string" ? parseFloat(level) : level;
-			if (numLevel > 0.01) {
-				console.log("[Pipecat] Local audio level:", numLevel.toFixed(3));
-			}
-		};
-
 		const onError = (error: unknown) => {
 			console.error("[Pipecat] Error:", error);
 		};
@@ -266,12 +261,26 @@ function RecordingControl() {
 		const onTransportStateChanged = (transportState: unknown) => {
 			console.log("[Pipecat] Transport state changed:", transportState);
 
-			// Trigger reconnection on error state if not already handled
-			// This handles cases where Disconnected event never fires
-			if (transportState === "error" && !hasTriggeredDisconnectRef.current) {
-				console.log("[Pipecat] Error state detected, triggering reconnection");
-				hasTriggeredDisconnectRef.current = true;
-				handlePipecatDisconnect();
+			// Recreate client on error with debounce to prevent rapid recreation loops
+			// The Pipecat client may be in a bad state after connection failure
+			// NOTE: Don't call handleDisconnected() here - it causes state changes that
+			// make the old connection manager try to reconnect before unmounting
+			if (transportState === "error") {
+				const now = Date.now();
+				const timeSinceLastRecreation = now - lastRecreationTimeRef.current;
+
+				if (timeSinceLastRecreation >= RECREATION_DEBOUNCE_MS) {
+					console.log(
+						"[Pipecat] Error state detected, recreating client (debounced)",
+					);
+					lastRecreationTimeRef.current = now;
+					// Just trigger recreation - state will reset when new client mounts
+					onNeedsClientRecreation();
+				} else {
+					console.log(
+						`[Pipecat] Error state detected, skipping recreation (${timeSinceLastRecreation}ms since last)`,
+					);
+				}
 			}
 		};
 
@@ -282,7 +291,6 @@ function RecordingControl() {
 		client.on(RTVIEvent.TrackStarted, onTrackStarted);
 		client.on(RTVIEvent.UserStartedSpeaking, onUserStartedSpeaking);
 		client.on(RTVIEvent.UserStoppedSpeaking, onUserStoppedSpeaking);
-		client.on(RTVIEvent.LocalAudioLevel, onLocalAudioLevel);
 		client.on(RTVIEvent.Error, onError);
 		client.on(RTVIEvent.DeviceError, onDeviceError);
 		client.on(RTVIEvent.TransportStateChanged, onTransportStateChanged);
@@ -295,7 +303,6 @@ function RecordingControl() {
 			client.off(RTVIEvent.TrackStarted, onTrackStarted);
 			client.off(RTVIEvent.UserStartedSpeaking, onUserStartedSpeaking);
 			client.off(RTVIEvent.UserStoppedSpeaking, onUserStoppedSpeaking);
-			client.off(RTVIEvent.LocalAudioLevel, onLocalAudioLevel);
 			client.off(RTVIEvent.Error, onError);
 			client.off(RTVIEvent.DeviceError, onDeviceError);
 			client.off(RTVIEvent.TransportStateChanged, onTransportStateChanged);
@@ -306,6 +313,7 @@ function RecordingControl() {
 		handlePipecatConnect,
 		handlePipecatDisconnect,
 		handleResponse,
+		onNeedsClientRecreation,
 		typeTextMutation,
 		addHistoryEntry,
 		clearResponseTimeout,
@@ -404,7 +412,9 @@ function RecordingControl() {
 				userSelect: "none",
 			}}
 		>
-			{state === "processing" ? (
+			{state === "processing" ||
+			state === "disconnected" ||
+			state === "connecting" ? (
 				<div
 					style={{
 						width: 48,
@@ -438,9 +448,71 @@ function RecordingControl() {
 export default function OverlayApp() {
 	const [client, setClient] = useState<PipecatClient | null>(null);
 	const [devicesReady, setDevicesReady] = useState(false);
+	// Track if we're recreating the client (to prevent rendering with stale client)
+	const [isRecreating, setIsRecreating] = useState(false);
 	const { data: settings } = useSettings();
 
+	// Callback to recreate client when connection fails
+	const handleClientRecreation = useCallback(() => {
+		console.log("[OverlayApp] Client recreation requested");
+		// Mark as recreating first - this will unmount RecordingControl
+		setIsRecreating(true);
+	}, []);
+
+	// Ref to access current client without adding it to effect dependencies
+	const clientRef = useRef<PipecatClient | null>(null);
+	clientRef.current = client;
+
+	// Handle client recreation when isRecreating becomes true
 	useEffect(() => {
+		if (!isRecreating) return;
+
+		console.log("[OverlayApp] Recreation triggered, cleaning up old client...");
+
+		// Reset store state to "disconnected" so UI shows spinner during reconnection
+		// This must happen before new client is created so useConnectionManager sees correct state
+		useRecordingStore.getState().handleDisconnected();
+
+		// Clean up old client first (using ref to avoid dependency)
+		if (clientRef.current) {
+			clientRef.current.disconnect().catch(() => {});
+		}
+		setClient(null);
+		setDevicesReady(false);
+
+		// Create new client after a brief delay to ensure cleanup completes
+		const timeoutId = setTimeout(() => {
+			console.log("[OverlayApp] Creating new client...");
+			const transport = new WebSocketTransport({
+				serializer: new ProtobufFrameSerializer(),
+			});
+			const pipecatClient = new PipecatClient({
+				transport,
+				enableMic: false,
+				enableCam: false,
+			});
+			setClient(pipecatClient);
+
+			pipecatClient
+				.initDevices()
+				.then(() => {
+					console.log("[OverlayApp] Devices ready (recreation)");
+					setDevicesReady(true);
+					setIsRecreating(false);
+				})
+				.catch((error: unknown) => {
+					console.error("Failed to initialize devices:", error);
+					setDevicesReady(true);
+					setIsRecreating(false);
+				});
+		}, 100);
+
+		return () => clearTimeout(timeoutId);
+	}, [isRecreating]);
+
+	// Initial client creation on mount
+	useEffect(() => {
+		console.log("[OverlayApp] Initial client creation...");
 		const transport = new WebSocketTransport({
 			serializer: new ProtobufFrameSerializer(),
 		});
@@ -454,14 +526,16 @@ export default function OverlayApp() {
 		pipecatClient
 			.initDevices()
 			.then(() => {
+				console.log("[OverlayApp] Devices ready (initial)");
 				setDevicesReady(true);
 			})
 			.catch((error: unknown) => {
 				console.error("Failed to initialize devices:", error);
-				setDevicesReady(true); // Still show UI so user can try again
+				setDevicesReady(true);
 			});
 
 		return () => {
+			console.log("[OverlayApp] Unmounting, cleaning up client...");
 			pipecatClient.disconnect().catch(() => {});
 		};
 	}, []);
@@ -473,7 +547,7 @@ export default function OverlayApp() {
 		}
 	}, [client, devicesReady, settings?.selected_mic_id]);
 
-	if (!client || !devicesReady) {
+	if (!client || !devicesReady || isRecreating) {
 		return (
 			<div
 				className="flex items-center justify-center"
@@ -492,7 +566,7 @@ export default function OverlayApp() {
 	return (
 		<ThemeProvider>
 			<PipecatClientProvider client={client}>
-				<RecordingControl />
+				<RecordingControl onNeedsClientRecreation={handleClientRecreation} />
 			</PipecatClientProvider>
 		</ThemeProvider>
 	);

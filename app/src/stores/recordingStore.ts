@@ -67,7 +67,8 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
 	},
 
 	handleDisconnected: () => {
-		set({ state: "disconnected" });
+		// Reset state fully - client will be recreated and set via setClient
+		set({ state: "disconnected", retryInfo: null, client: null });
 	},
 
 	startRecording: async () => {

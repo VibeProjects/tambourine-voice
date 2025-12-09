@@ -99,7 +99,7 @@ pub fn run() {
             if let Ok(Some(monitor)) = overlay.current_monitor() {
                 let size = monitor.size();
                 let scale = monitor.scale_factor();
-                let x = (size.width as f64 / scale) as i32 - 100;
+                let x = (size.width as f64 / scale) as i32 - 150;
                 let y = (size.height as f64 / scale) as i32 - 100;
                 let _ = overlay.set_position(tauri::Position::Logical(tauri::LogicalPosition {
                     x: x as f64,

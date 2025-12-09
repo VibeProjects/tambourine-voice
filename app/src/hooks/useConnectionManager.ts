@@ -44,9 +44,17 @@ export function useConnectionManager({
 		useRecordingStore();
 
 	// Create and start connection manager when client and serverUrl are ready
+	// Note: When client changes (recreation), this effect will re-run with fresh client
 	useEffect(() => {
-		if (!client || !serverUrl) return;
+		if (!client || !serverUrl) {
+			console.log("[ConnectionManager] Skipping - no client or serverUrl", {
+				client: !!client,
+				serverUrl: !!serverUrl,
+			});
+			return;
+		}
 
+		console.log("[ConnectionManager] Creating manager for client...");
 		const manager = createConnectionManager(client, serverUrl, {
 			onConnecting: () => {
 				console.log("[ConnectionManager] Connecting...");
@@ -63,8 +71,10 @@ export function useConnectionManager({
 				handleDisconnected();
 			},
 			onRetryScheduled: (attemptNumber, delayMs) => {
+				const delayFormatted =
+					delayMs >= 1000 ? `${(delayMs / 1000).toFixed(1)}s` : `${delayMs}ms`;
 				console.log(
-					`[ConnectionManager] Retry ${attemptNumber} scheduled in ${delayMs}ms`,
+					`[ConnectionManager] Retry ${attemptNumber} scheduled in ${delayFormatted}`,
 				);
 				const retryInfo = { attemptNumber, nextRetryMs: delayMs };
 				setRetryInfo(retryInfo);
@@ -83,6 +93,7 @@ export function useConnectionManager({
 		manager.start();
 
 		return () => {
+			console.log("[ConnectionManager] Cleanup - stopping manager");
 			manager.stop();
 			managerRef.current = null;
 		};
@@ -91,6 +102,8 @@ export function useConnectionManager({
 	// Handler for Pipecat's Connected event
 	const handlePipecatConnect = useCallback(() => {
 		console.log("[ConnectionManager] Pipecat connected event received");
+		// Stop the manager's retry loop since we're now connected
+		managerRef.current?.stop();
 		// Clear retry info since we're now connected
 		setRetryInfo(null);
 		handleConnected();
@@ -110,14 +123,8 @@ export function useConnectionManager({
 		}
 
 		handleDisconnected();
-
-		// Trigger reconnection via the manager
-		if (managerRef.current) {
-			// Small delay to allow Pipecat to clean up before reconnecting
-			setTimeout(() => {
-				managerRef.current?.start();
-			}, 100);
-		}
+		// Note: Reconnection is handled by client recreation in OverlayApp,
+		// triggered by onTransportStateChanged error handling
 	}, [handleDisconnected, onMidRecordingDisconnect]);
 
 	return {

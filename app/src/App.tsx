@@ -169,9 +169,7 @@ function InstructionsCard() {
 
 	return (
 		<div className="instructions-card animate-in">
-			<h2 className="instructions-card-title">
-				Dictate with your voice
-			</h2>
+			<h2 className="instructions-card-title">Dictate with your voice</h2>
 			<div className="instructions-methods">
 				<div className="instruction-method">
 					<span className="instruction-label">Toggle:</span>

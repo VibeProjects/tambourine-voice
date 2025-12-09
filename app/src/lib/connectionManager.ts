@@ -31,10 +31,7 @@ const MAX_DELAY = Duration.seconds(30);
 const createRetrySchedule = () =>
 	Schedule.exponential("1 second").pipe(
 		Schedule.jittered,
-		Schedule.whileOutput((duration) =>
-			Duration.lessThanOrEqualTo(duration, MAX_DELAY),
-		),
-		Schedule.compose(Schedule.forever),
+		Schedule.map((duration) => Duration.min(duration, MAX_DELAY)),
 	);
 
 /**
@@ -111,6 +108,10 @@ export function createConnectionManager(
 
 	return {
 		start: () => {
+			console.log(
+				"[ConnectionManager] start() called, connecting:",
+				connecting,
+			);
 			if (connecting) return;
 			connecting = true;
 
@@ -136,6 +137,7 @@ export function createConnectionManager(
 		},
 
 		stop: () => {
+			console.log("[ConnectionManager] stop() called");
 			if (abortController) {
 				abortController.abort();
 				abortController = null;

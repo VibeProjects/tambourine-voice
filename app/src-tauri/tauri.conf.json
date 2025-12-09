@@ -16,8 +16,8 @@
 			{
 				"title": "Tambourine",
 				"label": "main",
-				"width": 800,
-				"height": 550,
+				"width": 1280,
+				"height": 720,
 				"resizable": true,
 				"fullscreen": false,
 				"center": true
