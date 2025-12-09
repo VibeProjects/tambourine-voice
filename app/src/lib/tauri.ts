@@ -48,6 +48,7 @@ export interface CleanupPromptSections {
 export interface AppSettings {
 	toggle_hotkey: HotkeyConfig;
 	hold_hotkey: HotkeyConfig;
+	paste_last_hotkey: HotkeyConfig;
 	selected_mic_id: string | null;
 	sound_enabled: boolean;
 	cleanup_prompt_sections: CleanupPromptSections | null;
@@ -95,6 +96,22 @@ export const tauriAPI = {
 		return invoke("update_hold_hotkey", { hotkey });
 	},
 
+	async updatePasteLastHotkey(hotkey: HotkeyConfig): Promise<void> {
+		return invoke("update_paste_last_hotkey", { hotkey });
+	},
+
+	async updateToggleHotkeyLive(hotkey: HotkeyConfig): Promise<void> {
+		return invoke("update_toggle_hotkey_live", { hotkey });
+	},
+
+	async updateHoldHotkeyLive(hotkey: HotkeyConfig): Promise<void> {
+		return invoke("update_hold_hotkey_live", { hotkey });
+	},
+
+	async updatePasteLastHotkeyLive(hotkey: HotkeyConfig): Promise<void> {
+		return invoke("update_paste_last_hotkey_live", { hotkey });
+	},
+
 	async updateSelectedMic(micId: string | null): Promise<void> {
 		return invoke("update_selected_mic", { micId });
 	},
@@ -123,6 +140,10 @@ export const tauriAPI = {
 
 	async isAudioMuteSupported(): Promise<boolean> {
 		return invoke("is_audio_mute_supported");
+	},
+
+	async resetHotkeysToDefaults(): Promise<boolean> {
+		return invoke("reset_hotkeys_to_defaults");
 	},
 
 	// History API

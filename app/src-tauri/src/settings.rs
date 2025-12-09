@@ -1,7 +1,29 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::RwLock;
+
+#[cfg(desktop)]
+use tauri_plugin_global_shortcut::Shortcut;
+
+// ============================================================================
+// DEFAULT HOTKEY CONSTANTS - Single source of truth for all default hotkeys
+// ============================================================================
+
+/// Default modifiers for all hotkeys
+pub const DEFAULT_HOTKEY_MODIFIERS: &[&str] = &["ctrl", "alt"];
+
+/// Default key for toggle recording (Ctrl+Alt+Space)
+pub const DEFAULT_TOGGLE_KEY: &str = "Space";
+
+/// Default key for hold-to-record (Ctrl+Alt+`)
+pub const DEFAULT_HOLD_KEY: &str = "Backquote";
+
+/// Default key for paste last transcription (Ctrl+Alt+.)
+pub const DEFAULT_PASTE_LAST_KEY: &str = "Period";
+
+// ============================================================================
 
 /// Configuration for a hotkey combination
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -15,9 +37,73 @@ pub struct HotkeyConfig {
 impl Default for HotkeyConfig {
     fn default() -> Self {
         Self {
-            modifiers: vec!["ctrl".to_string(), "alt".to_string()],
-            key: "Space".to_string(),
+            modifiers: DEFAULT_HOTKEY_MODIFIERS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            key: DEFAULT_TOGGLE_KEY.to_string(),
         }
+    }
+}
+
+impl HotkeyConfig {
+    /// Create default toggle hotkey config
+    pub fn default_toggle() -> Self {
+        Self {
+            modifiers: DEFAULT_HOTKEY_MODIFIERS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            key: DEFAULT_TOGGLE_KEY.to_string(),
+        }
+    }
+
+    /// Create default hold hotkey config
+    pub fn default_hold() -> Self {
+        Self {
+            modifiers: DEFAULT_HOTKEY_MODIFIERS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            key: DEFAULT_HOLD_KEY.to_string(),
+        }
+    }
+
+    /// Create default paste-last hotkey config
+    pub fn default_paste_last() -> Self {
+        Self {
+            modifiers: DEFAULT_HOTKEY_MODIFIERS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            key: DEFAULT_PASTE_LAST_KEY.to_string(),
+        }
+    }
+
+    /// Convert to shortcut string format like "ctrl+alt+Space"
+    /// Note: modifiers must be lowercase for the parser to recognize them
+    pub fn to_shortcut_string(&self) -> String {
+        let mut parts: Vec<String> = self.modifiers.iter().map(|m| m.to_lowercase()).collect();
+        parts.push(self.key.clone());
+        parts.join("+")
+    }
+
+    /// Convert to a tauri Shortcut using FromStr parsing
+    #[cfg(desktop)]
+    pub fn to_shortcut(&self) -> Result<Shortcut, String> {
+        let shortcut_str = self.to_shortcut_string();
+        Shortcut::from_str(&shortcut_str)
+            .map_err(|e| format!("Failed to parse shortcut '{}': {:?}", shortcut_str, e))
+    }
+
+    /// Check if this hotkey has the same key combination as another
+    pub fn is_same_as(&self, other: &HotkeyConfig) -> bool {
+        self.key.eq_ignore_ascii_case(&other.key)
+            && self.modifiers.len() == other.modifiers.len()
+            && self
+                .modifiers
+                .iter()
+                .all(|m| other.modifiers.iter().any(|o| m.eq_ignore_ascii_case(o)))
     }
 }
 
@@ -80,6 +166,10 @@ pub struct AppSettings {
     #[serde(default = "default_hold_hotkey")]
     pub hold_hotkey: HotkeyConfig,
 
+    /// Hotkey for paste last transcription
+    #[serde(default = "default_paste_last_hotkey")]
+    pub paste_last_hotkey: HotkeyConfig,
+
     /// Selected microphone device ID (None = system default)
     #[serde(default)]
     pub selected_mic_id: Option<String>,
@@ -106,17 +196,15 @@ pub struct AppSettings {
 }
 
 fn default_toggle_hotkey() -> HotkeyConfig {
-    HotkeyConfig {
-        modifiers: vec!["ctrl".to_string(), "alt".to_string()],
-        key: "Space".to_string(),
-    }
+    HotkeyConfig::default_toggle()
 }
 
 fn default_hold_hotkey() -> HotkeyConfig {
-    HotkeyConfig {
-        modifiers: vec!["ctrl".to_string(), "alt".to_string()],
-        key: "Period".to_string(),
-    }
+    HotkeyConfig::default_hold()
+}
+
+fn default_paste_last_hotkey() -> HotkeyConfig {
+    HotkeyConfig::default_paste_last()
 }
 
 fn default_sound_enabled() -> bool {
@@ -128,6 +216,7 @@ impl Default for AppSettings {
         Self {
             toggle_hotkey: default_toggle_hotkey(),
             hold_hotkey: default_hold_hotkey(),
+            paste_last_hotkey: default_paste_last_hotkey(),
             selected_mic_id: None,
             sound_enabled: true,
             cleanup_prompt_sections: None,
@@ -225,6 +314,18 @@ impl SettingsManager {
                 .write()
                 .map_err(|e| format!("Failed to write settings: {}", e))?;
             settings.hold_hotkey = hotkey;
+        }
+        self.save()
+    }
+
+    /// Update the paste last hotkey
+    pub fn update_paste_last_hotkey(&self, hotkey: HotkeyConfig) -> Result<(), String> {
+        {
+            let mut settings = self
+                .settings
+                .write()
+                .map_err(|e| format!("Failed to write settings: {}", e))?;
+            settings.paste_last_hotkey = hotkey;
         }
         self.save()
     }

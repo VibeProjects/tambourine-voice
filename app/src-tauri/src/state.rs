@@ -6,4 +6,6 @@ pub struct AppState {
     pub is_recording: AtomicBool,
     /// Tracks if PTT key is currently held down (for hold-to-record mode)
     pub ptt_key_held: AtomicBool,
+    /// Tracks if paste-last key is currently held down
+    pub paste_key_held: AtomicBool,
 }

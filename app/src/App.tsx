@@ -9,6 +9,11 @@ import {
 	PromptSettings,
 	ProvidersSettings,
 } from "./components/settings";
+import {
+	DEFAULT_HOLD_HOTKEY,
+	DEFAULT_PASTE_LAST_HOTKEY,
+	DEFAULT_TOGGLE_HOTKEY,
+} from "./lib/hotkeyDefaults";
 import { useSettings } from "./lib/queries";
 import {
 	type HotkeyConfig,
@@ -157,15 +162,10 @@ function HotkeyDisplay({ config }: { config: HotkeyConfig }) {
 function InstructionsCard() {
 	const { data: settings } = useSettings();
 
-	const toggleHotkey = settings?.toggle_hotkey ?? {
-		modifiers: ["ctrl", "alt"],
-		key: "Space",
-	};
-
-	const holdHotkey = settings?.hold_hotkey ?? {
-		modifiers: ["ctrl", "alt"],
-		key: "Period",
-	};
+	const toggleHotkey = settings?.toggle_hotkey ?? DEFAULT_TOGGLE_HOTKEY;
+	const holdHotkey = settings?.hold_hotkey ?? DEFAULT_HOLD_HOTKEY;
+	const pasteLastHotkey =
+		settings?.paste_last_hotkey ?? DEFAULT_PASTE_LAST_HOTKEY;
 
 	return (
 		<div className="instructions-card animate-in">
@@ -180,6 +180,11 @@ function InstructionsCard() {
 					<span className="instruction-label">Hold:</span>
 					<HotkeyDisplay config={holdHotkey} />
 					<span className="instruction-desc">Hold to record</span>
+				</div>
+				<div className="instruction-method">
+					<span className="instruction-label">Paste:</span>
+					<HotkeyDisplay config={pasteLastHotkey} />
+					<span className="instruction-desc">Paste last result</span>
 				</div>
 			</div>
 			<p className="instructions-card-text">

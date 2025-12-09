@@ -28,7 +28,8 @@ pub async fn type_text(app: AppHandle, text: String) -> Result<(), String> {
     rx.recv().map_err(|e| e.to_string())?
 }
 
-fn type_text_blocking(text: &str) -> Result<(), String> {
+/// Type text using clipboard and paste. Used internally by shortcut handlers.
+pub fn type_text_blocking(text: &str) -> Result<(), String> {
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
 
     // Save previous clipboard content

@@ -33,7 +33,8 @@ export function useSettings() {
 export function useUpdateToggleHotkey() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (hotkey: HotkeyConfig) => tauriAPI.updateToggleHotkey(hotkey),
+		mutationFn: (hotkey: HotkeyConfig) =>
+			tauriAPI.updateToggleHotkeyLive(hotkey),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
 		},
@@ -43,7 +44,18 @@ export function useUpdateToggleHotkey() {
 export function useUpdateHoldHotkey() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (hotkey: HotkeyConfig) => tauriAPI.updateHoldHotkey(hotkey),
+		mutationFn: (hotkey: HotkeyConfig) => tauriAPI.updateHoldHotkeyLive(hotkey),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
+}
+
+export function useUpdatePasteLastHotkey() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (hotkey: HotkeyConfig) =>
+			tauriAPI.updatePasteLastHotkeyLive(hotkey),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
 		},
@@ -95,6 +107,25 @@ export function useUpdateCleanupPromptSections() {
 			tauriAPI.updateCleanupPromptSections(sections),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
+}
+
+export function useResetHotkeysToDefaults() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			console.log("Resetting hotkeys to defaults...");
+			const result = await tauriAPI.resetHotkeysToDefaults();
+			console.log("Reset hotkeys result:", result);
+			return result;
+		},
+		onSuccess: () => {
+			console.log("Reset hotkeys succeeded, invalidating settings query");
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+		},
+		onError: (error) => {
+			console.error("Reset hotkeys failed:", error);
 		},
 	});
 }
