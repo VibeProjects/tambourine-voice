@@ -3,7 +3,7 @@ use tauri::State;
 
 /// Validate that a new hotkey doesn't conflict with other configured hotkeys
 #[cfg(desktop)]
-fn validate_no_duplicate_shortcut(
+pub(crate) fn validate_no_duplicate_shortcut(
     new_hotkey: &HotkeyConfig,
     current_settings: &AppSettings,
     exclude_type: &str,
@@ -23,6 +23,41 @@ fn validate_no_duplicate_shortcut(
         }
     }
 
+    Ok(())
+}
+
+/// Generic helper for updating hotkeys with validation
+/// Validates no duplicate shortcuts and that the shortcut can be parsed, then calls the update function
+#[cfg(desktop)]
+fn update_hotkey_with_validation<F>(
+    hotkey: HotkeyConfig,
+    hotkey_type: &str,
+    settings_manager: &SettingsManager,
+    update_fn: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&SettingsManager, HotkeyConfig) -> Result<(), String>,
+{
+    // Validate no duplicate
+    let current_settings = settings_manager.get()?;
+    validate_no_duplicate_shortcut(&hotkey, &current_settings, hotkey_type)?;
+
+    // Validate the shortcut can be parsed
+    hotkey.to_shortcut()?;
+
+    // Save settings
+    update_fn(settings_manager, hotkey)?;
+
+    let display_name = match hotkey_type {
+        "toggle" => "Toggle",
+        "hold" => "Hold",
+        "paste_last" => "Paste last",
+        _ => hotkey_type,
+    };
+    log::info!(
+        "{} hotkey updated. Restart required for changes to take effect.",
+        display_name
+    );
     Ok(())
 }
 
@@ -77,18 +112,9 @@ pub async fn update_toggle_hotkey_live(
     hotkey: HotkeyConfig,
     settings_manager: State<'_, SettingsManager>,
 ) -> Result<(), String> {
-    // Validate no duplicate
-    let current_settings = settings_manager.get()?;
-    validate_no_duplicate_shortcut(&hotkey, &current_settings, "toggle")?;
-
-    // Validate the shortcut can be parsed
-    hotkey.to_shortcut()?;
-
-    // Save settings (restart required for hotkey to take effect)
-    settings_manager.update_toggle_hotkey(hotkey)?;
-
-    log::info!("Toggle hotkey updated. Restart required for changes to take effect.");
-    Ok(())
+    update_hotkey_with_validation(hotkey, "toggle", &settings_manager, |sm, h| {
+        sm.update_toggle_hotkey(h)
+    })
 }
 
 /// Update hold hotkey (saves settings, restart required for hotkey to take effect)
@@ -98,18 +124,9 @@ pub async fn update_hold_hotkey_live(
     hotkey: HotkeyConfig,
     settings_manager: State<'_, SettingsManager>,
 ) -> Result<(), String> {
-    // Validate no duplicate
-    let current_settings = settings_manager.get()?;
-    validate_no_duplicate_shortcut(&hotkey, &current_settings, "hold")?;
-
-    // Validate the shortcut can be parsed
-    hotkey.to_shortcut()?;
-
-    // Save settings (restart required for hotkey to take effect)
-    settings_manager.update_hold_hotkey(hotkey)?;
-
-    log::info!("Hold hotkey updated. Restart required for changes to take effect.");
-    Ok(())
+    update_hotkey_with_validation(hotkey, "hold", &settings_manager, |sm, h| {
+        sm.update_hold_hotkey(h)
+    })
 }
 
 /// Update paste last hotkey (saves settings, restart required for hotkey to take effect)
@@ -119,18 +136,9 @@ pub async fn update_paste_last_hotkey_live(
     hotkey: HotkeyConfig,
     settings_manager: State<'_, SettingsManager>,
 ) -> Result<(), String> {
-    // Validate no duplicate
-    let current_settings = settings_manager.get()?;
-    validate_no_duplicate_shortcut(&hotkey, &current_settings, "paste_last")?;
-
-    // Validate the shortcut can be parsed
-    hotkey.to_shortcut()?;
-
-    // Save settings (restart required for hotkey to take effect)
-    settings_manager.update_paste_last_hotkey(hotkey)?;
-
-    log::info!("Paste last hotkey updated. Restart required for changes to take effect.");
-    Ok(())
+    update_hotkey_with_validation(hotkey, "paste_last", &settings_manager, |sm, h| {
+        sm.update_paste_last_hotkey(h)
+    })
 }
 
 /// Update the selected microphone device

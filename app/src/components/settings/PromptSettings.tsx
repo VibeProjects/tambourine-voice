@@ -15,6 +15,19 @@ const DEFAULT_SECTIONS: CleanupPromptSections = {
 	dictionary: { enabled: false, content: null },
 };
 
+type SectionKey = "main" | "advanced" | "dictionary";
+
+interface LocalSectionState {
+	enabled: boolean;
+	content: string;
+}
+
+interface LocalSections {
+	main: LocalSectionState;
+	advanced: LocalSectionState;
+	dictionary: LocalSectionState;
+}
+
 export function PromptSettings() {
 	const { data: settings } = useSettings();
 	const { data: defaultSections, isLoading: isLoadingDefaultSections } =
@@ -22,81 +35,76 @@ export function PromptSettings() {
 	const updateCleanupPromptSections = useUpdateCleanupPromptSections();
 	const setServerPromptSections = useSetServerPromptSections();
 
-	// Local state for enabled flags (content is managed by PromptSectionEditor)
-	const [mainEnabled, setMainEnabled] = useState(true);
-	const [advancedEnabled, setAdvancedEnabled] = useState(true);
-	const [dictionaryEnabled, setDictionaryEnabled] = useState(false);
-
-	// Content state for initializing editors (synced from settings)
-	const [mainContent, setMainContent] = useState<string>("");
-	const [advancedContent, setAdvancedContent] = useState<string>("");
-	const [dictionaryContent, setDictionaryContent] = useState<string>("");
+	// Consolidated local state for all sections
+	const [localSections, setLocalSections] = useState<LocalSections>({
+		main: { enabled: true, content: "" },
+		advanced: { enabled: true, content: "" },
+		dictionary: { enabled: false, content: "" },
+	});
 
 	// Track if each section has custom content
-	const mainHasCustom = Boolean(
-		settings?.cleanup_prompt_sections?.main?.content,
-	);
-	const advancedHasCustom = Boolean(
-		settings?.cleanup_prompt_sections?.advanced?.content,
-	);
-	const dictionaryHasCustom = Boolean(
-		settings?.cleanup_prompt_sections?.dictionary?.content,
-	);
+	const hasCustomContent = {
+		main: Boolean(settings?.cleanup_prompt_sections?.main?.content),
+		advanced: Boolean(settings?.cleanup_prompt_sections?.advanced?.content),
+		dictionary: Boolean(settings?.cleanup_prompt_sections?.dictionary?.content),
+	};
 
 	// Sync local state with settings when loaded
 	useEffect(() => {
 		if (settings !== undefined && defaultSections !== undefined) {
 			const sections = settings.cleanup_prompt_sections ?? DEFAULT_SECTIONS;
 
-			setMainEnabled(sections.main.enabled);
-			setMainContent(sections.main.content ?? defaultSections.main);
-
-			setAdvancedEnabled(sections.advanced.enabled);
-			setAdvancedContent(sections.advanced.content ?? defaultSections.advanced);
-
-			setDictionaryEnabled(sections.dictionary.enabled);
-			setDictionaryContent(
-				sections.dictionary.content ?? defaultSections.dictionary,
-			);
+			setLocalSections({
+				main: {
+					enabled: sections.main.enabled,
+					content: sections.main.content ?? defaultSections.main,
+				},
+				advanced: {
+					enabled: sections.advanced.enabled,
+					content: sections.advanced.content ?? defaultSections.advanced,
+				},
+				dictionary: {
+					enabled: sections.dictionary.enabled,
+					content: sections.dictionary.content ?? defaultSections.dictionary,
+				},
+			});
 		}
 	}, [settings, defaultSections]);
 
-	// Helper to build sections object from current state
+	// Helper to build CleanupPromptSections from local state with optional overrides
 	const buildSections = (overrides?: {
-		mainEnabled?: boolean;
-		mainContent?: string | null;
-		advancedEnabled?: boolean;
-		advancedContent?: string | null;
-		dictionaryEnabled?: boolean;
-		dictionaryContent?: string | null;
+		key: SectionKey;
+		enabled?: boolean;
+		content?: string | null;
 	}): CleanupPromptSections => {
-		const currentMainContent = overrides?.mainContent ?? mainContent;
-		const currentAdvancedContent =
-			overrides?.advancedContent ?? advancedContent;
-		const currentDictionaryContent =
-			overrides?.dictionaryContent ?? dictionaryContent;
+		const getContent = (key: SectionKey): string | null => {
+			const content =
+				overrides?.key === key && overrides.content !== undefined
+					? overrides.content
+					: localSections[key].content;
+
+			// Return null if content matches default (to use server default)
+			if (content === defaultSections?.[key]) {
+				return null;
+			}
+			return content || null;
+		};
+
+		const getEnabled = (key: SectionKey): boolean => {
+			return overrides?.key === key && overrides.enabled !== undefined
+				? overrides.enabled
+				: localSections[key].enabled;
+		};
 
 		return {
-			main: {
-				enabled: overrides?.mainEnabled ?? mainEnabled,
-				content:
-					currentMainContent === defaultSections?.main
-						? null
-						: currentMainContent || null,
-			},
+			main: { enabled: getEnabled("main"), content: getContent("main") },
 			advanced: {
-				enabled: overrides?.advancedEnabled ?? advancedEnabled,
-				content:
-					currentAdvancedContent === defaultSections?.advanced
-						? null
-						: currentAdvancedContent || null,
+				enabled: getEnabled("advanced"),
+				content: getContent("advanced"),
 			},
 			dictionary: {
-				enabled: overrides?.dictionaryEnabled ?? dictionaryEnabled,
-				content:
-					currentDictionaryContent === defaultSections?.dictionary
-						? null
-						: currentDictionaryContent || null,
+				enabled: getEnabled("dictionary"),
+				content: getContent("dictionary"),
 			},
 		};
 	};
@@ -110,55 +118,32 @@ export function PromptSettings() {
 		});
 	};
 
-	// Toggle handlers - save immediately when toggling
-	const handleMainToggle = (checked: boolean) => {
-		setMainEnabled(checked);
-		saveAllSections(buildSections({ mainEnabled: checked }));
+	// Generic toggle handler
+	const handleToggle = (key: SectionKey, checked: boolean) => {
+		setLocalSections((prev) => ({
+			...prev,
+			[key]: { ...prev[key], enabled: checked },
+		}));
+		saveAllSections(buildSections({ key, enabled: checked }));
 	};
 
-	const handleAdvancedToggle = (checked: boolean) => {
-		setAdvancedEnabled(checked);
-		saveAllSections(buildSections({ advancedEnabled: checked }));
+	// Generic save handler
+	const handleSave = (key: SectionKey, content: string) => {
+		setLocalSections((prev) => ({
+			...prev,
+			[key]: { ...prev[key], content },
+		}));
+		saveAllSections(buildSections({ key, content }));
 	};
 
-	const handleDictionaryToggle = (checked: boolean) => {
-		setDictionaryEnabled(checked);
-		saveAllSections(buildSections({ dictionaryEnabled: checked }));
-	};
-
-	// Save handlers
-	const handleSaveMain = (content: string) => {
-		setMainContent(content);
-		saveAllSections(buildSections({ mainContent: content }));
-	};
-
-	const handleSaveAdvanced = (content: string) => {
-		setAdvancedContent(content);
-		saveAllSections(buildSections({ advancedContent: content }));
-	};
-
-	const handleSaveDictionary = (content: string) => {
-		setDictionaryContent(content);
-		saveAllSections(buildSections({ dictionaryContent: content }));
-	};
-
-	// Reset handlers
-	const handleResetMain = () => {
-		const defaultContent = defaultSections?.main ?? "";
-		setMainContent(defaultContent);
-		saveAllSections(buildSections({ mainContent: null }));
-	};
-
-	const handleResetAdvanced = () => {
-		const defaultContent = defaultSections?.advanced ?? "";
-		setAdvancedContent(defaultContent);
-		saveAllSections(buildSections({ advancedContent: null }));
-	};
-
-	const handleResetDictionary = () => {
-		const defaultContent = defaultSections?.dictionary ?? "";
-		setDictionaryContent(defaultContent);
-		saveAllSections(buildSections({ dictionaryContent: null }));
+	// Generic reset handler
+	const handleReset = (key: SectionKey) => {
+		const defaultContent = defaultSections?.[key] ?? "";
+		setLocalSections((prev) => ({
+			...prev,
+			[key]: { ...prev[key], content: defaultContent },
+		}));
+		saveAllSections(buildSections({ key, content: null }));
 	};
 
 	return (
@@ -181,13 +166,13 @@ export function PromptSettings() {
 							sectionKey="main-prompt"
 							title="Core Cleanup Rules"
 							description="Filler word removal, grammar, punctuation commands"
-							enabled={mainEnabled}
-							initialContent={mainContent}
+							enabled={localSections.main.enabled}
+							initialContent={localSections.main.content}
 							defaultContent={defaultSections?.main ?? ""}
-							hasCustom={mainHasCustom}
-							onToggle={handleMainToggle}
-							onSave={handleSaveMain}
-							onReset={handleResetMain}
+							hasCustom={hasCustomContent.main}
+							onToggle={(checked) => handleToggle("main", checked)}
+							onSave={(content) => handleSave("main", content)}
+							onReset={() => handleReset("main")}
 							isSaving={updateCleanupPromptSections.isPending}
 						/>
 
@@ -195,13 +180,13 @@ export function PromptSettings() {
 							sectionKey="advanced-prompt"
 							title="Advanced Features"
 							description='Backtrack corrections ("scratch that") and list formatting'
-							enabled={advancedEnabled}
-							initialContent={advancedContent}
+							enabled={localSections.advanced.enabled}
+							initialContent={localSections.advanced.content}
 							defaultContent={defaultSections?.advanced ?? ""}
-							hasCustom={advancedHasCustom}
-							onToggle={handleAdvancedToggle}
-							onSave={handleSaveAdvanced}
-							onReset={handleResetAdvanced}
+							hasCustom={hasCustomContent.advanced}
+							onToggle={(checked) => handleToggle("advanced", checked)}
+							onSave={(content) => handleSave("advanced", content)}
+							onReset={() => handleReset("advanced")}
 							isSaving={updateCleanupPromptSections.isPending}
 						/>
 
@@ -209,13 +194,13 @@ export function PromptSettings() {
 							sectionKey="dictionary-prompt"
 							title="Personal Dictionary"
 							description="Custom word mappings for technical terms"
-							enabled={dictionaryEnabled}
-							initialContent={dictionaryContent}
+							enabled={localSections.dictionary.enabled}
+							initialContent={localSections.dictionary.content}
 							defaultContent={defaultSections?.dictionary ?? ""}
-							hasCustom={dictionaryHasCustom}
-							onToggle={handleDictionaryToggle}
-							onSave={handleSaveDictionary}
-							onReset={handleResetDictionary}
+							hasCustom={hasCustomContent.dictionary}
+							onToggle={(checked) => handleToggle("dictionary", checked)}
+							onSave={(content) => handleSave("dictionary", content)}
+							onReset={() => handleReset("dictionary")}
 							isSaving={updateCleanupPromptSections.isPending}
 						/>
 					</Accordion>

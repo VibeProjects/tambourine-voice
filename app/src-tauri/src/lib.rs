@@ -12,6 +12,9 @@ mod history;
 mod settings;
 mod state;
 
+#[cfg(test)]
+mod tests;
+
 use audio_mute::AudioMuteManager;
 use history::HistoryStorage;
 use settings::{AppSettings, HotkeyConfig, SettingsManager};
@@ -22,7 +25,7 @@ use tauri_plugin_global_shortcut::{Shortcut, ShortcutEvent, ShortcutState};
 
 /// Normalize a shortcut string for comparison (handles "ctrl" vs "control" differences)
 #[cfg(desktop)]
-fn normalize_shortcut_string(s: &str) -> String {
+pub(crate) fn normalize_shortcut_string(s: &str) -> String {
     s.to_lowercase()
         .replace("ctrl", "control")
         .replace("cmd", "super")
@@ -366,16 +369,13 @@ fn build_global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     // Create shortcuts from settings (with fallbacks to defaults)
     let toggle_shortcut = initial_settings
         .toggle_hotkey
-        .to_shortcut()
-        .unwrap_or_else(|_| HotkeyConfig::default_toggle().to_shortcut().unwrap());
+        .to_shortcut_or_default(HotkeyConfig::default_toggle);
     let hold_shortcut = initial_settings
         .hold_hotkey
-        .to_shortcut()
-        .unwrap_or_else(|_| HotkeyConfig::default_hold().to_shortcut().unwrap());
+        .to_shortcut_or_default(HotkeyConfig::default_hold);
     let paste_last_shortcut = initial_settings
         .paste_last_hotkey
-        .to_shortcut()
-        .unwrap_or_else(|_| HotkeyConfig::default_paste_last().to_shortcut().unwrap());
+        .to_shortcut_or_default(HotkeyConfig::default_paste_last);
 
     log::info!(
         "Registering shortcuts - Toggle: {}, Hold: {}, PasteLast: {}",

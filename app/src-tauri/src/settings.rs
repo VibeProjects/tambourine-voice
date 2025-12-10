@@ -105,6 +105,16 @@ impl HotkeyConfig {
                 .iter()
                 .all(|m| other.modifiers.iter().any(|o| m.eq_ignore_ascii_case(o)))
     }
+
+    /// Convert to a tauri Shortcut, falling back to a default if parsing fails
+    #[cfg(desktop)]
+    pub fn to_shortcut_or_default(&self, default_fn: fn() -> Self) -> Shortcut {
+        self.to_shortcut().unwrap_or_else(|_| {
+            default_fn()
+                .to_shortcut()
+                .expect("Default hotkey must be valid")
+        })
+    }
 }
 
 /// Configuration for a single prompt section
