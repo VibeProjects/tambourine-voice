@@ -284,7 +284,7 @@ STT_PROVIDERS: dict[STTProviderId, STTProviderConfig] = {
     ),
     STTProviderId.WHISPER: STTProviderConfig(
         provider_id=STTProviderId.WHISPER,
-        display_name="Local Whisper",
+        display_name="Whisper",
         service_class=WhisperSTTService,
         credential_mapper=NoAuthMapper(availability_fields=("whisper_enabled",)),
     ),

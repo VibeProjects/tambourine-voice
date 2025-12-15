@@ -193,7 +193,14 @@ export function ProvidersSettings() {
 						<p className="settings-description">
 							Increase if nothing is getting transcribed
 						</p>
-						<div style={{ marginTop: 12, paddingRight: 8 }}>
+						<div
+							style={{
+								marginTop: 12,
+								display: "flex",
+								alignItems: "center",
+								gap: 12,
+							}}
+						>
 							<Slider
 								value={sliderValue}
 								onChange={setSliderValue}
@@ -203,17 +210,17 @@ export function ProvidersSettings() {
 								step={0.1}
 								marks={[
 									{ value: 0.5, label: "0.5s" },
-									{ value: 1.5, label: "1.5s" },
 									{ value: 3.0, label: "3.0s" },
 								]}
 								styles={{
+									root: { flex: 1 },
 									track: { backgroundColor: "var(--bg-elevated)" },
 									bar: { backgroundColor: "var(--accent-primary)" },
 									thumb: { borderColor: "var(--accent-primary)" },
 									markLabel: { color: "var(--text-secondary)", fontSize: 10 },
 								}}
 							/>
-							<Text size="xs" c="dimmed" ta="center" style={{ marginTop: 8 }}>
+							<Text size="xs" c="dimmed" style={{ minWidth: 32 }}>
 								{sliderValue.toFixed(1)}s
 							</Text>
 						</div>
